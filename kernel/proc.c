@@ -706,7 +706,7 @@ int dump(void)
 }
 
 int dump2(int pid, int register_num, uint64 return_value_addr){
-  if (register_num < 2 || register_num > 11) return 3;
+  if (register_num < 2 || register_num > 11) return -3;
 
   struct proc *cur_proc = myproc();
   
@@ -721,11 +721,11 @@ int dump2(int pid, int register_num, uint64 return_value_addr){
   }
 
   if (requested_proc == 0){
-    return 2;
+    return -2;
   }
   
   if (requested_proc->pid != cur_proc->pid && requested_proc->parent->pid != cur_proc->pid){
-    return 1;
+    return -1;
   }
 
   uint64 register_value;
@@ -765,7 +765,7 @@ int dump2(int pid, int register_num, uint64 return_value_addr){
   int res = copyout(cur_proc->pagetable, return_value_addr, (char *) (&register_value), 8);
 
   if (res == -1){
-    return 4;
+    return -4;
   }
 
   return 0;
