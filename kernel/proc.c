@@ -704,3 +704,69 @@ int dump(void)
 
   return 0;
 }
+
+int dump2(int pid, int register_num, uint64 return_value_addr){
+  if (register_num < 2 || register_num > 11) return 3;
+
+  struct proc *cur_proc = myproc();
+  
+  struct proc *p;
+  struct proc *requested_proc = 0;
+  for (p = proc; p < &proc[NPROC]; p++){
+    if (p-> state == UNUSED) continue;
+    if (p->pid == pid){
+      requested_proc = p;
+      break;
+    }
+  }
+
+  if (requested_proc == 0){
+    return 2;
+  }
+  
+  if (requested_proc->pid != cur_proc->pid && requested_proc->parent->pid != cur_proc->pid){
+    return 1;
+  }
+
+  uint64 register_value;
+  switch (register_num){
+    case 2: 
+      register_value = requested_proc->trapframe->s2;
+      break;
+    case 3: 
+      register_value = requested_proc->trapframe->s3;
+      break;
+    case 4: 
+      register_value = requested_proc->trapframe->s4;
+      break;
+    case 5: 
+      register_value = requested_proc->trapframe->s5;
+      break;
+    case 6: 
+      register_value = requested_proc->trapframe->s6;
+      break;
+    case 7: 
+      register_value = requested_proc->trapframe->s7;
+      break;
+    case 8: 
+      register_value = requested_proc->trapframe->s8;
+      break;
+    case 9: 
+      register_value = requested_proc->trapframe->s9;
+      break;
+    case 10: 
+      register_value = requested_proc->trapframe->s10;
+      break;
+    case 11: 
+      register_value = requested_proc->trapframe->s11;
+      break;
+  }
+
+  int res = copyout(cur_proc->pagetable, return_value_addr, (char *) (&register_value), 8);
+
+  if (res == -1){
+    return 4;
+  }
+
+  return 0;
+}

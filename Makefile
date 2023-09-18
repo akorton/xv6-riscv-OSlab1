@@ -100,12 +100,13 @@ $U/usys.S : $U/usys.pl
 $U/usys.o : $U/usys.S
 	$(CC) $(CFLAGS) -c -o $U/usys.o $U/usys.S
 
-$U/dumptests.S.o : $U/dumptests.S
-	$(CC) $(CFLAGS) -c -o $U/dumptests.S.o $U/dumptests.S
+$U/%tests.S.o : $U/%tests.S
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-$U/dumptests.o: $U/dumptests.c
-	$(CC) $(CFLAGS) -c -o $U/dumptests.o $U/dumptests.c
-$U/_dumptests: $U/dumptests.o $U/dumptests.S.o $(ULIB)
+$U/%tests.o: $U/%tests.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$U/_%tests: $U/%tests.o $U/%tests.S.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
@@ -144,6 +145,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_pingpong\
 	$U/_dumptests\
+	$U/_dump2tests\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
