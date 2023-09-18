@@ -681,3 +681,26 @@ procdump(void)
     printf("\n");
   }
 }
+
+void print_registry(uint64 registry, int number)
+{
+  printf("Registry number %d: %d.\n", number, registry & 0xFFFFFFFF);
+}
+
+int dump(void)
+{
+  struct proc *cur_proc = myproc();
+  struct trapframe *trapframe = cur_proc->trapframe;
+  print_registry(trapframe->s2, 2);
+  print_registry(trapframe->s3, 3);
+  print_registry(trapframe->s4, 4);
+  print_registry(trapframe->s5, 5);
+  print_registry(trapframe->s6, 6);
+  print_registry(trapframe->s7, 7);
+  print_registry(trapframe->s8, 8);
+  print_registry(trapframe->s9, 9);
+  print_registry(trapframe->s10, 10);
+  print_registry(trapframe->s11, 11);
+
+  return 0;
+}
