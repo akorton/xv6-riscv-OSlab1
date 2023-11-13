@@ -243,6 +243,9 @@ int bd_initfree(void *bd_left, void *bd_right) {
   int free = 0;
 
   for (int k = 0; k < MAXSIZE; k++) {  // skip max size
+    printf("Block size: %d\n", k);
+    printf("Alloc:");
+    bd_print_vector(bd_sizes[k].alloc, NBLK(k));
     int left = blk_index_next(k, bd_left);
     int right = blk_index(k, bd_right);
     free += bd_initfree_pair(k, left);
@@ -255,7 +258,7 @@ int bd_initfree(void *bd_left, void *bd_right) {
 // Mark the range [bd_base,p) as allocated
 int bd_mark_data_structures(char *p) {
   int meta = p - (char *)bd_base;
-  printf("bd: %d meta bytes for managing %d bytes of memory\n", meta,
+  printf("bd: 0x%x meta bytes for managing 0x%x bytes of memory\n", meta,
          BLK_SIZE(MAXSIZE));
   bd_mark(bd_base, p);
   return meta;
@@ -286,7 +289,7 @@ void bd_init(void *base, void *end) {
     nsizes++;  // round up to the next power of 2
   }
 
-  printf("bd: memory sz is %d bytes; allocate an size array of length %d\n",
+  printf("bd: memory sz is 0x%x bytes; allocate an size array of length %d\n",
          (char *)end - p, nsizes);
 
   // allocate bd_sizes array
@@ -327,7 +330,7 @@ void bd_init(void *base, void *end) {
 
   // check if the amount that is free is what we expect
   if (free != BLK_SIZE(MAXSIZE) - meta - unavailable) {
-    printf("free %d %d\n", free, BLK_SIZE(MAXSIZE) - meta - unavailable);
+    printf("free 0x%x %d\n", free, BLK_SIZE(MAXSIZE) - meta - unavailable);
     panic("bd_init: free mem");
   }
 }
