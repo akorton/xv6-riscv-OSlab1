@@ -20,6 +20,9 @@ proc_lst_init(struct proc_list *lst)
 {
   lst->next = lst;
   lst->prev = lst;
+  struct proc *cur_proc = bd_malloc(sizeof(struct proc));
+  lst->cur_proc = cur_proc;
+  initlock(&cur_proc->lock, "head lock");
 }
 
 int
@@ -44,13 +47,14 @@ proc_lst_pop(struct proc_list *lst) {
 }
 
 void
-proc_lst_push(struct proc_list *lst, void *p)
+proc_lst_push(struct proc_list *lst, struct proc_list *p)
 {
-  struct proc_list *e = (struct proc_list *) p;
-  e->next = lst->next;
-  e->prev = lst;
+  if (lst->next != lst) acquire(&lst->next->cur_proc->lock);
+  p->next = lst->next;
+  p->prev = lst;
   lst->next->prev = p;
-  lst->next = e;
+  lst->next = p;
+  if (p->next != lst) release(&p->next->cur_proc->lock);
 }
 
 void
@@ -62,6 +66,15 @@ proc_lst_print(struct proc_list *lst)
   printf("\n");
 }
 
+
+int proc_lst_size(struct proc_list *lst)
+{
+  int size = 1;
+  for (struct proc_list *p = lst->next; p != lst; p = p->next) {
+    size++;
+  }
+  return size;
+}
 
 
 struct cpu cpus[NCPU];
@@ -86,6 +99,8 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+pagetable_t kpgtbl_local;
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -95,14 +110,15 @@ proc_mapstacks(pagetable_t kpgtbl)
   // struct proc *p;
   
   // for(p = proc; p < &proc[NPROC]; p++) {
-  for (int idx = 0; idx < 10000; idx++) {
-    char *pa = kalloc();
-    if(pa == 0)
-      panic("kalloc");
-    // uint64 va = KSTACK((int) (p - proc));
-    uint64 va = KSTACK(idx);
-    kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-  }
+  // for (int idx = 0; idx < 80; idx++) {
+  //   char *pa = kalloc();
+  //   if(pa == 0)
+  //     panic("kalloc");
+  //   // uint64 va = KSTACK((int) (p - proc));
+  //   uint64 va = KSTACK(idx);
+  //   kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  // }
+  kpgtbl_local = kpgtbl;
 }
 
 // initialize the proc table.
@@ -196,10 +212,16 @@ allocproc(void)
   initlock(&p->lock, "proc");
   acquire(&p->lock);
   p->pid = allocpid();
-  // From procinit
-  uint64 va = KSTACK(p->pid);
-  p->kstack = va;
+  char *pa = kalloc();
+  if(pa == 0)
+    panic("kalloc");
 
+  uint64 va = KSTACK(p->pid);
+  kvmmap(kpgtbl_local, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+
+  // From procinit
+  p->kstack = va;
+  memset(p->ofile, 0, sizeof(p->ofile));
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -222,9 +244,15 @@ allocproc(void)
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
-  // acquire(&proc_list_lock);
+
+  // Some other fields
+  p->killed = 0;
+  p->chan = 0;
+  p->xstate = 0;
+
+  acquire(&proc_list->cur_proc->lock);
   proc_lst_push(proc_list, (void *) cur_list);
-  // release(&proc_list_lock);
+  release(&proc_list->cur_proc->lock);
   return p;
 }
 
@@ -249,7 +277,7 @@ freeproc(struct proc *p)
   // p->chan = 0;
   // p->killed = 0;
   // p->xstate = 0;
-  // p->state = UNUSED;
+  p->state = UNUSED;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -403,7 +431,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-
+  printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
   return pid;
 }
 
