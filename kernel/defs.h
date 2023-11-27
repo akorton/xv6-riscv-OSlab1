@@ -9,6 +9,7 @@ struct sleeplock;
 struct stat;
 struct superblock;
 struct list;
+struct proc_list;
 
 // bio.c
 void            binit(void);
@@ -195,6 +196,14 @@ void lst_push(struct list*, void *);
 void *lst_pop(struct list*);
 void lst_print(struct list*);
 int lst_empty(struct list*);
+
+// proc_list.c
+void proc_lst_init(struct proc_list*);
+void proc_lst_remove(struct proc_list*);
+void proc_lst_push(struct proc_list*, struct proc_list*);
+void roc_lst_print(struct proc_list*);
+int proc_lst_empty(struct proc_list*);
+struct proc_list *get_proc_list_by_proc(struct proc*, struct proc_list*);
 
 // buddy.c
 void bd_init(void *, void *);
