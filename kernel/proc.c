@@ -76,6 +76,9 @@ struct proc_list *get_proc_list_by_proc(struct proc *cur_proc, struct proc_list*
 
 
 struct cpu cpus[NCPU];
+uint64 kstacks[NPROC_KSTACK];
+int free_kstacks[NPROC_KSTACK];
+struct spinlock kstacks_lock;
 
 // struct proc proc[NPROC];
 struct proc_list *proc_list;
@@ -108,14 +111,17 @@ proc_mapstacks(pagetable_t kpgtbl)
   // struct proc *p;
   
   // for(p = proc; p < &proc[NPROC]; p++) {
-  // for (int idx = 0; idx < 80; idx++) {
-  //   char *pa = kalloc();
-  //   if(pa == 0)
-  //     panic("kalloc");
-  //   // uint64 va = KSTACK((int) (p - proc));
-  //   uint64 va = KSTACK(idx);
-  //   kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-  // }
+  for (int idx = 0; idx < NPROC_KSTACK; idx++) {
+    char *pa = kalloc();
+    if(pa == 0)
+      panic("kalloc");
+    uint64 va = KSTACK(idx);
+    kvmmap(kpgtbl, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+    kstacks[idx] = va;
+  }
+  memset(free_kstacks, 1, sizeof(free_kstacks));
+  initlock(&kstacks_lock, "kstacks lock");
+
   kpgtbl_local = kpgtbl;
 }
 
@@ -210,12 +216,27 @@ allocproc(void)
   initlock(&p->lock, "proc");
   acquire(&p->lock);
   p->pid = allocpid();
-  char *pa = kalloc();
-  if(pa == 0)
-    panic("kalloc");
 
-  uint64 va = KSTACK(p->pid);
-  kvmmap(kpgtbl_local, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  uint64 va;
+  int found_va = 0;
+  acquire(&kstacks_lock);
+  for (int idx = 0; idx < NPROC_KSTACK; idx++) {
+    if (free_kstacks[idx]) {
+      va = kstacks[idx];
+      free_kstacks[idx] = 0;
+      found_va = 1;
+      break;
+    }
+  }
+  release(&kstacks_lock);
+  if (!found_va) {
+    char *pa = kalloc();
+    if(pa == 0)
+      panic("kalloc");
+
+    va = KSTACK(p->pid + NPROC_KSTACK);
+    kvmmap(kpgtbl_local, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  }
 
   // From procinit
   p->kstack = va;
@@ -276,6 +297,15 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  
+  acquire(&kstacks_lock);
+  for (int idx = 0; idx < NPROC_KSTACK; idx++) {
+    if (kstacks[idx] == p->kstack) {
+      free_kstacks[idx] = 1;
+      break;
+    }
+  }
+  release(&kstacks_lock);
   // p->pagetable = 0;
   // p->sz = 0;
   // p->pid = 0;
