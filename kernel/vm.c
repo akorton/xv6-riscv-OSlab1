@@ -185,6 +185,9 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
+      // printf("[debug]\n");
+      // vmprint(pagetable);
+      // printf("\n\n");
       kfree((void*)pa);
     }
     *pte = 0;
@@ -317,13 +320,27 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
+    // #ifdef UB_ON_WRITE
+    // mem = (char*)pa;
+    // kup((void*)pa);
+    // flags = flags & ~PTE_W;
+    // #else
     if((mem = kalloc()) == 0)
       goto err;
     memmove(mem, (char*)pa, PGSIZE);
+    // #endif
+
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+      // #ifndef UB_ON_WRITE
       kfree(mem);
+      // #endif
       goto err;
     }
+
+    // Forbid writing to parent
+    // #ifdef UB_ON_WRITE
+    // *pte = *pte & (~PTE_W);
+    // #endif
   }
   return 0;
 
@@ -436,4 +453,42 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void print_str_else_space(char* str, int condition)
+{
+  if (condition) printf(str);
+  else printf(" ");
+}
+
+void vmprint_internal(pagetable_t pagetable, int depth)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if (!pte) continue;
+    for (int d = 0; d < depth; d++){
+      printf("..");
+    }
+    printf(" [");
+    print_str_else_space("V", pte & PTE_V);
+    print_str_else_space("R", pte & PTE_R);
+    print_str_else_space("W", pte & PTE_W);
+    print_str_else_space("X", pte & PTE_X);
+    print_str_else_space("U", pte & PTE_U);
+    printf("] ");
+    
+    printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      vmprint_internal((pagetable_t)child, depth + 1);
+    }
+  }
+}
+
+void vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  vmprint_internal(pagetable, 1);
 }

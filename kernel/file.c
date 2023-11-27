@@ -29,7 +29,8 @@ struct file*
 filealloc(void)
 {
   struct file *f;
-  void* alloced_memory = bd_malloc(sizeof(struct file));
+  // void* alloced_memory = bd_malloc(sizeof(struct file));
+  void* alloced_memory = kalloc();
   // Cant allocate sizeof(struct file) bytes
   if (alloced_memory == 0){
     return 0;

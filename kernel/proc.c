@@ -60,7 +60,8 @@ procinit(void)
 { 
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  proc_list = bd_malloc(sizeof(struct proc_list));
+  // proc_list = bd_malloc(sizeof(struct proc_list));
+  proc_list = kalloc();
   proc_lst_init(proc_list);
   initlock(&proc_list_lock, "prock_list_loc");
 }
@@ -119,8 +120,10 @@ allocproc(void)
   struct proc_list *cur_list;
   struct proc* p;
 
-  cur_list = bd_malloc(sizeof(struct proc_list));
-  p = bd_malloc(sizeof(struct proc));
+  // cur_list = bd_malloc(sizeof(struct proc_list));
+  // p = bd_malloc(sizeof(struct proc));
+  cur_list = kalloc();
+  p = kalloc();
   cur_list->cur_proc = p;
   // No memory for new proc
   if (p == 0 || cur_list == 0) {

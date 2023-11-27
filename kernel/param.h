@@ -12,3 +12,5 @@
 #define FSSIZE       2000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
 #define NPROC_KSTACK  80   // number of kstack for procs to allocate on boot
+#define UB_ON_WRITE       // If we should just copy physical memory on fork
+#define NPAGE      32000  // Maximum number of pages

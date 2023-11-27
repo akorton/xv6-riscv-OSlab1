@@ -12,7 +12,8 @@ proc_lst_init(struct proc_list *lst)
 {
   lst->next = lst;
   lst->prev = lst;
-  struct proc *cur_proc = bd_malloc(sizeof(struct proc));
+  // struct proc *cur_proc = bd_malloc(sizeof(struct proc));
+  struct proc* cur_proc = kalloc();
   lst->cur_proc = cur_proc;
   initlock(&cur_proc->lock, "head lock");
 }
