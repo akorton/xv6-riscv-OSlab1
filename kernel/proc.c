@@ -832,3 +832,26 @@ int dump2(int pid, int register_num, uint64 return_value_addr){
 
   return 0;
 }
+
+// Get neighbors in proc_list of proc by pid
+// Returns 0 on success and pid_left in lpid_a, pid_right in rpid_a
+// Returns -1 if process with this pid does not exist
+int neighbors(int pid, uint64 lpid_a, uint64 rpid_a)
+{
+  struct proc_list *p;
+  pagetable_t pagetable = myproc()->pagetable;
+  for (p = proc_list->next; p != proc_list; p = p->next) {
+    if (p->cur_proc->pid == pid) break;
+  }
+
+  // No such process
+  if (p == proc_list) return -1;
+
+  // Copyout failed
+  if ((lpid_a != 0 && copyout(pagetable, lpid_a, (char *)(&p->prev->cur_proc->pid), sizeof(int)) < 0) || 
+    (rpid_a != 0 && copyout(pagetable, rpid_a, (char *)(&p->next->cur_proc->pid), sizeof(int)) < 0)) {
+      return -1;
+  }
+
+  return 0;
+}

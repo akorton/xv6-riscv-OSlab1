@@ -105,3 +105,13 @@ uint64 sys_dump2(void)
   argaddr(2, &return_value);
   return dump2(pid, addr, return_value);
 }
+
+uint64 sys_neighbors(void)
+{
+  int pid;
+  uint64 lpid_a, rpid_a;
+  argint(0, &pid);
+  argaddr(1, &lpid_a);
+  argaddr(2, &rpid_a);
+  return neighbors(pid, lpid_a, rpid_a);
+}
