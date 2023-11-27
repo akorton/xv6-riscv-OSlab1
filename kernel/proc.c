@@ -34,16 +34,6 @@ void
 proc_lst_remove(struct proc_list *e) {
   e->prev->next = e->next;
   e->next->prev = e->prev;
-  bd_free(e->cur_proc);
-}
-
-void*
-proc_lst_pop(struct proc_list *lst) {
-  if(lst->next == lst)
-    panic("proc_lst_pop");
-  struct proc_list *p = lst->next;
-  proc_lst_remove(p);
-  return (void *)p;
 }
 
 void
@@ -74,6 +64,14 @@ int proc_lst_size(struct proc_list *lst)
     size++;
   }
   return size;
+}
+
+struct proc_list *get_proc_list_by_proc(struct proc *cur_proc, struct proc_list* head)
+{
+  for (struct proc_list *p = head->next; p != head; p = p->next) {
+    if (p->cur_proc == cur_proc) return p;
+  }
+  return 0;
 }
 
 
@@ -127,9 +125,9 @@ procinit(void)
 { 
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  initlock(&proc_list_lock, "proc_list_lock");
   proc_list = bd_malloc(sizeof(struct proc_list));
   proc_lst_init(proc_list);
+  initlock(&proc_list_lock, "prock_list_loc");
   // for(p = proc; p < &proc[NPROC]; p++) {
   //     initlock(&p->lock, "proc");
   //     p->state = UNUSED;
@@ -226,16 +224,20 @@ allocproc(void)
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+    // acquire(&proc_list_lock);
     freeproc(p);
-    release(&p->lock);
+    // release(&proc_list_lock);
+    // release(&p->lock);
     return 0;
   }
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
+    // acquire(&proc_list_lock);
     freeproc(p);
-    release(&p->lock);
+    // release(&proc_list_lock);
+    // release(&p->lock);
     return 0;
   }
 
@@ -251,7 +253,7 @@ allocproc(void)
   p->xstate = 0;
 
   acquire(&proc_list->cur_proc->lock);
-  proc_lst_push(proc_list, (void *) cur_list);
+  proc_lst_push(proc_list, cur_list);
   release(&proc_list->cur_proc->lock);
   return p;
 }
@@ -262,13 +264,18 @@ allocproc(void)
 static void
 freeproc(struct proc *p)
 {
+  // struct proc_list *next = cur->next;
+  // struct proc_list *prev = cur->prev;
+  // acquire(&next->cur_proc->lock);
+  // acquire(&p->lock);
+  // acquire(&prev->cur_proc->lock);
+  release(&p->lock);
+  struct proc_list *cur = get_proc_list_by_proc(p, proc_list);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
-  // lst_remove((void *) p); // Potential race condition!!!!
-  // bd_free(p);
   // p->pagetable = 0;
   // p->sz = 0;
   // p->pid = 0;
@@ -277,7 +284,14 @@ freeproc(struct proc *p)
   // p->chan = 0;
   // p->killed = 0;
   // p->xstate = 0;
-  p->state = UNUSED;
+  // p->state = UNUSED;
+  proc_lst_remove(cur);
+  // release(&next->cur_proc->lock);
+  // release(&p->lock);
+  // release(&prev->cur_proc->lock);
+  kfree(p);
+  kfree(cur);
+  // printf("Freed proc with pid %d\n", p->pid);
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -400,8 +414,10 @@ fork(void)
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+    // acquire(&proc_list_lock);
     freeproc(np);
-    release(&np->lock);
+    // release(&proc_list_lock);
+    // release(&np->lock);
     return -1;
   }
   np->sz = p->sz;
@@ -431,7 +447,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-  printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
+  // printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
   return pid;
 }
 
@@ -442,6 +458,8 @@ reparent(struct proc *p)
 {
   struct proc *pp;
   struct proc_list *cur_proc;
+
+  // acquire(&proc_list_lock);
   for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
     pp = cur_proc->cur_proc;
     if(pp->parent == p){
@@ -449,6 +467,7 @@ reparent(struct proc *p)
       wakeup(initproc);
     }
   }
+  // release(&proc_list_lock);
 }
 
 // Exit the current process.  Does not return.
@@ -482,7 +501,9 @@ exit(int status)
   reparent(p);
 
   // Parent might be sleeping in wait().
+  // acquire(&proc_list_lock);
   wakeup(p->parent);
+  // release(&proc_list_lock);
   
   acquire(&p->lock);
 
@@ -510,6 +531,7 @@ wait(uint64 addr)
   for(;;){
     // Scan through table looking for exited children.
     havekids = 0;
+    // acquire(&proc_list_lock);
     for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
       pp = cur_proc->cur_proc;
       if(pp->parent == p){
@@ -524,16 +546,19 @@ wait(uint64 addr)
                                   sizeof(pp->xstate)) < 0) {
             release(&pp->lock);
             release(&wait_lock);
+            release(&proc_list_lock);
             return -1;
           }
           freeproc(pp);
-          release(&pp->lock);
+          // release(&pp->lock);
+          // release(&proc_list_lock);
           release(&wait_lock);
           return pid;
         }
         release(&pp->lock);
       }
     }
+    // release(&proc_list_lock);
 
     // No point waiting if we don't have any children.
     if(!havekids || killed(p)){
@@ -564,6 +589,8 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    // int released = 0;
+    acquire(&proc_list_lock);
     // proc_lst_print(proc_list);
     for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
       p = cur_proc->cur_proc;
@@ -574,14 +601,19 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+        // release(&proc_list_lock);
+        // released = 1;
         swtch(&c->context, &p->context);
-
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
+        // release(&p->lock);
+        // break;
       }
       release(&p->lock);
     }
+    // if (!released) 
+    release(&proc_list_lock);
   }
 }
 
@@ -600,7 +632,7 @@ sched(void)
 
   if(!holding(&p->lock))
     panic("sched p->lock");
-  if(mycpu()->noff != 1)
+  if(mycpu()->noff != 2)
     panic("sched locks");
   if(p->state == RUNNING)
     panic("sched running");
@@ -704,6 +736,7 @@ kill(int pid)
   struct proc *p;
   struct proc_list* cur_proc;
 
+  // acquire(&proc_list_lock);
   for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
     p = cur_proc->cur_proc;
     acquire(&p->lock);
@@ -714,10 +747,12 @@ kill(int pid)
         p->state = RUNNABLE;
       }
       release(&p->lock);
+      // release(&proc_list_lock);
       return 0;
     }
     release(&p->lock);
   }
+  // release(&proc_list_lock);
   return -1;
 }
 
@@ -789,6 +824,7 @@ procdump(void)
   char *state;
 
   printf("\n");
+  acquire(&proc_list_lock);
   for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
     p = cur_proc->cur_proc;
     if(p->state == UNUSED)
@@ -800,6 +836,7 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+  release(&proc_list_lock);
 }
 
 void print_registry(uint64 registry, int number)
@@ -834,6 +871,7 @@ int dump2(int pid, int register_num, uint64 return_value_addr){
   struct proc *p;
   struct proc *requested_proc = 0;
 
+  acquire(&proc_list_lock);
   for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
     p = cur_proc->cur_proc;
     if (p-> state == UNUSED) continue;
@@ -842,6 +880,7 @@ int dump2(int pid, int register_num, uint64 return_value_addr){
       break;
     }
   }
+  release(&proc_list_lock);
 
   if (requested_proc == 0){
     return -2;
