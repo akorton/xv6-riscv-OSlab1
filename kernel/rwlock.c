@@ -12,17 +12,6 @@ void initrwlock(struct rwlock *lk, char *name) {
 }
 
 void acquire_write(struct rwlock* lk) {
-    if (holding(&lk->write_lock)) {
-        while (1) {
-            acquire(&lk->counter_lock);
-            if (lk->read_counter == 0) {
-                acquire(&lk->write_lock);
-                release(&lk->counter_lock);
-                return;
-            }
-            release(&lk->counter_lock);
-        }
-    }
     acquire(&lk->write_lock);
 }
 
@@ -35,6 +24,7 @@ void acquire_read(struct rwlock* lk) {
     lk->read_counter++;
     if (lk->read_counter == 1) {
         acquire(&lk->write_lock);
+        lk->write_lock.cpu = 0;
         pop_off();
     }
     release(&lk->counter_lock);
