@@ -16,6 +16,9 @@ struct spinlock kstacks_lock;
 struct proc_list *proc_list;
 struct rwlock rwlock;
 
+struct spinlock unused_lock;
+int unused_count = 0;
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -63,6 +66,7 @@ procinit(void)
   proc_list = bd_malloc(sizeof(struct proc_list));
   proc_lst_init(proc_list);
   initrwlock(&rwlock, "rwlock");
+  initlock(&unused_lock, "unused_lock");
 }
 
 // Must be called with interrupts disabled,
@@ -194,8 +198,8 @@ allocproc(void)
 
 // Must hold write_lock to call
 void remove_unused_from_proc_list() {
-  // if (!rwlock.write_lock.locked)
-  //   panic("Remove something from proc list without write lock");
+  if (!rwlock.write_lock.locked)
+    panic("Remove something from proc list without write lock");
 
   struct proc_list *cur;
   for (cur = proc_list->next; cur != proc_list; cur = cur->next) {
@@ -207,7 +211,10 @@ void remove_unused_from_proc_list() {
     proc_lst_remove(removed);
     kfree(removed->cur_proc);
     kfree(removed);
+    // Can do this without lock because write_lock is acquired
+    unused_count--;
   }
+  if (unused_count < 0) panic("unused count < 0");
 }
 
 // free a proc structure and the data hanging from it,
@@ -235,10 +242,10 @@ freeproc(struct proc *p)
   // Not clearing it right away but rather changing the state to UNUSED so no other functions will use it
   p->state = UNUSED;
   p->parent = 0;
+  acquire(&unused_lock);
+  unused_count++;
+  release(&unused_lock);
   release(&p->lock);
-  // proc_lst_remove(cur);
-  // kfree(p);
-  // kfree(cur);
   // printf("Freed proc with pid %d\n", p->pid);
 }
 
@@ -522,17 +529,14 @@ scheduler(void)
   struct cpu *c = mycpu();
   
   c->proc = 0;
-  int clear_list_cnt = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    if (cpuid() == 0) clear_list_cnt++;
     // If we are on the first cpu clear the list of procs
-    if (cpuid() == 0 && clear_list_cnt == 100) {
+    if (unused_count > NPROC_KSTACK / 2) {
       acquire_write(&rwlock);
       remove_unused_from_proc_list();
       release_write(&rwlock);
-      clear_list_cnt = 0;
     }
 
     acquire_read(&rwlock);
