@@ -24,7 +24,7 @@ int sleep(int);
 int uptime(void);
 int dump(void);
 int dump2(int, int, uint64*);
-int neighbors(int, int*, int*);
+int neighbors(int, int*, int*, int*, int*);
 
 // ulib.c
 int stat(const char*, struct stat*);

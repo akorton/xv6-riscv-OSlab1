@@ -34,17 +34,17 @@ void print_buf(int* buf, int num) {
 
 void print_proc_list(int pid)
 {
-    int l, r;
+    int l, r, l_st, r_st;
     printf("%d ", pid);
-    neighbors(pid, &l, &r);
+    neighbors(pid, &l, &r, &l_st, &r_st);
     while (l != 0 || r != 0) {
         if (l != 0) {
-            printf("%d ", l);
-            neighbors(l, &l, 0);
+            if (l_st) printf("%d ", l);
+            neighbors(l, &l, 0, &l_st, 0);
         }
         if (r != 0) {
-            printf("%d ", r);
-            neighbors(r, 0, &r);
+            if (r_st) printf("%d ", r);
+            neighbors(r, 0, &r, 0, &r_st);
         }
     }
     printf("\n");
@@ -53,16 +53,16 @@ void print_proc_list(int pid)
 void fill_proc_pids(int pid, int* buf)
 {
     int idx = 0;
-    int l, r;
-    neighbors(pid, &l, &r);
+    int l, r, l_st, r_st;
+    neighbors(pid, &l, &r, &l_st, &r_st);
     while (l != 0 || r != 0) {
         if (l != 0) {
-            if (l > pid) buf[idx++] = l;
-            neighbors(l, &l, 0);
+            if (l > pid && l_st) buf[idx++] = l;
+            neighbors(l, &l, 0, &l_st, 0);
         }
         if (r != 0) {
-            if (r > pid) buf[idx++] = r;
-            neighbors(r, 0, &r);
+            if (r > pid && r_st) buf[idx++] = r;
+            neighbors(r, 0, &r, 0, &r_st);
         }
     }
 }
