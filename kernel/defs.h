@@ -10,6 +10,7 @@ struct stat;
 struct superblock;
 struct list;
 struct proc_list;
+struct rwlock;
 
 // bio.c
 void            binit(void);
@@ -204,12 +205,20 @@ void proc_lst_remove(struct proc_list*);
 void proc_lst_push(struct proc_list*, struct proc_list*);
 void roc_lst_print(struct proc_list*);
 int proc_lst_empty(struct proc_list*);
+int proc_lst_size(struct proc_list*);
 struct proc_list *get_proc_list_by_proc(struct proc*, struct proc_list*);
 
 // buddy.c
 void bd_init(void *, void *);
 void *bd_malloc(uint64);
 void bd_free(void *);
+
+// rwlock.c
+void initrwlock(struct rwlock *, char *);
+void acquire_write(struct rwlock*);
+void release_write(struct rwlock*);
+void acquire_read(struct rwlock*);
+void release_read(struct rwlock*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

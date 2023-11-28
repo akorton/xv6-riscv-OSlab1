@@ -6,7 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "proc_list.h"
-
+#include "rwlock.h"
 
 struct cpu cpus[NCPU];
 uint64 kstacks[NPROC_KSTACK];
@@ -14,7 +14,7 @@ int free_kstacks[NPROC_KSTACK];
 struct spinlock kstacks_lock;
 
 struct proc_list *proc_list;
-struct spinlock proc_list_lock;
+struct rwlock rwlock;
 
 struct proc *initproc;
 
@@ -62,7 +62,7 @@ procinit(void)
   initlock(&wait_lock, "wait_lock");
   proc_list = bd_malloc(sizeof(struct proc_list));
   proc_lst_init(proc_list);
-  initlock(&proc_list_lock, "prock_list_loc");
+  initrwlock(&rwlock, "rwlock");
 }
 
 // Must be called with interrupts disabled,
@@ -181,10 +181,33 @@ allocproc(void)
   p->chan = 0;
   p->xstate = 0;
 
+  // Acquire head and head->next locks if head->next exists
+  int at_least_two = proc_list->next != proc_list;
   acquire(&proc_list->cur_proc->lock);
+  struct proc_list *proc_next = proc_list->next;
+  if (at_least_two) acquire(&proc_next->cur_proc->lock);
   proc_lst_push(proc_list, cur_list);
+  if(at_least_two) release(&proc_next->cur_proc->lock);
   release(&proc_list->cur_proc->lock);
   return p;
+}
+
+// Must hold write_lock to call
+void remove_unused_from_proc_list() {
+  // if (!rwlock.write_lock.locked)
+  //   panic("Remove something from proc list without write lock");
+
+  struct proc_list *cur;
+  for (cur = proc_list->next; cur != proc_list; cur = cur->next) {
+    if (cur->cur_proc->state != UNUSED) continue;
+
+    // There always is prev, at least head
+    cur = cur->prev;
+    struct proc_list *removed = cur->next;
+    proc_lst_remove(removed);
+    kfree(removed->cur_proc);
+    kfree(removed);
+  }
 }
 
 // free a proc structure and the data hanging from it,
@@ -193,8 +216,7 @@ allocproc(void)
 static void
 freeproc(struct proc *p)
 {
-  release(&p->lock);
-  struct proc_list *cur = get_proc_list_by_proc(p, proc_list);
+  // struct proc_list *cur = get_proc_list_by_proc(p, proc_list);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -210,9 +232,13 @@ freeproc(struct proc *p)
   }
   release(&kstacks_lock);
 
-  proc_lst_remove(cur);
-  kfree(p);
-  kfree(cur);
+  // Not clearing it right away but rather changing the state to UNUSED so no other functions will use it
+  p->state = UNUSED;
+  p->parent = 0;
+  release(&p->lock);
+  // proc_lst_remove(cur);
+  // kfree(p);
+  // kfree(cur);
   // printf("Freed proc with pid %d\n", p->pid);
 }
 
@@ -366,7 +392,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-  // printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
+  printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
   return pid;
 }
 
@@ -460,7 +486,6 @@ wait(uint64 addr)
                                   sizeof(pp->xstate)) < 0) {
             release(&pp->lock);
             release(&wait_lock);
-            release(&proc_list_lock);
             return -1;
           }
           freeproc(pp);
@@ -497,11 +522,20 @@ scheduler(void)
   struct cpu *c = mycpu();
   
   c->proc = 0;
+  int clear_list_cnt = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
+    if (cpuid() == 0) clear_list_cnt++;
+    // If we are on the first cpu clear the list of procs
+    if (cpuid() == 0 && clear_list_cnt == 100) {
+      acquire_write(&rwlock);
+      remove_unused_from_proc_list();
+      release_write(&rwlock);
+      clear_list_cnt = 0;
+    }
 
-    acquire(&proc_list_lock);
+    acquire_read(&rwlock);
     for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
       p = cur_proc->cur_proc;
       acquire(&p->lock);
@@ -520,7 +554,7 @@ scheduler(void)
       }
       release(&p->lock);
     }
-    release(&proc_list_lock);
+    release_read(&rwlock);
   }
 }
 
@@ -539,7 +573,8 @@ sched(void)
 
   if(!holding(&p->lock))
     panic("sched p->lock");
-  if(mycpu()->noff != 2)
+  // Might be 2 because rwlock is holding write_lock somethimes
+  if(mycpu()->noff != 1 && mycpu()->noff != 2)
     panic("sched locks");
   if(p->state == RUNNING)
     panic("sched running");

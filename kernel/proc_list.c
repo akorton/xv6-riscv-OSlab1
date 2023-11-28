@@ -31,12 +31,10 @@ proc_lst_remove(struct proc_list *e) {
 void
 proc_lst_push(struct proc_list *lst, struct proc_list *p)
 {
-  if (lst->next != lst) acquire(&lst->next->cur_proc->lock);
   p->next = lst->next;
   p->prev = lst;
   lst->next->prev = p;
   lst->next = p;
-  if (p->next != lst) release(&p->next->cur_proc->lock);
 }
 
 void
