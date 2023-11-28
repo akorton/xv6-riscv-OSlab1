@@ -14,7 +14,6 @@ int free_kstacks[NPROC_KSTACK];
 struct spinlock kstacks_lock;
 
 struct proc_list *proc_list;
-struct spinlock proc_list_lock;
 
 struct proc *initproc;
 
@@ -62,7 +61,7 @@ procinit(void)
   initlock(&wait_lock, "wait_lock");
   proc_list = bd_malloc(sizeof(struct proc_list));
   proc_lst_init(proc_list);
-  initlock(&proc_list_lock, "prock_list_loc");
+  // initlock(&proc_list_lock, "prock_list_loc");
 }
 
 // Must be called with interrupts disabled,
@@ -181,10 +180,29 @@ allocproc(void)
   p->chan = 0;
   p->xstate = 0;
 
+  // Acquire lock for head and head->next because we are modifying both
+  int at_least_two = proc_list->next != proc_list;
+  struct proc_list *proc_list_next = proc_list->next;
   acquire(&proc_list->cur_proc->lock);
+  if (at_least_two) acquire(&proc_list_next->cur_proc->lock);
   proc_lst_push(proc_list, cur_list);
+  if (at_least_two) release(&proc_list_next->cur_proc->lock);
   release(&proc_list->cur_proc->lock);
   return p;
+}
+
+void pop_while_can(){
+  acquire(&proc_list->cur_proc->lock);
+  while (proc_list->next != proc_list && proc_list->next->cur_proc->state == UNUSED) {
+    acquire(&proc_list->next->cur_proc->lock);
+    acquire(&proc_list->next->next->cur_proc->lock);
+    struct proc_list *popped = proc_lst_pop(proc_list);
+    release(&popped->cur_proc->lock);
+    release(&popped->next->cur_proc->lock);
+    // kfree(popped->cur_proc);
+    // kfree(popped);
+  }
+  release(&proc_list->cur_proc->lock);
 }
 
 // free a proc structure and the data hanging from it,
@@ -193,7 +211,6 @@ allocproc(void)
 static void
 freeproc(struct proc *p)
 {
-  release(&p->lock);
   struct proc_list *cur = get_proc_list_by_proc(p, proc_list);
   if(p->trapframe)
     kfree((void*)p->trapframe);
@@ -210,9 +227,10 @@ freeproc(struct proc *p)
   }
   release(&kstacks_lock);
 
-  proc_lst_remove(cur);
-  kfree(p);
-  kfree(cur);
+  // proc_lst_remove(cur);
+  cur->cur_proc->state = UNUSED;
+  release(&p->lock);
+  pop_while_can();
   // printf("Freed proc with pid %d\n", p->pid);
 }
 
@@ -366,7 +384,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-  // printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
+  printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
   return pid;
 }
 
@@ -460,7 +478,6 @@ wait(uint64 addr)
                                   sizeof(pp->xstate)) < 0) {
             release(&pp->lock);
             release(&wait_lock);
-            release(&proc_list_lock);
             return -1;
           }
           freeproc(pp);
@@ -501,7 +518,7 @@ scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
-    acquire(&proc_list_lock);
+    // acquire(&proc_list_lock);
     for(cur_proc = proc_list->next; cur_proc != proc_list; cur_proc = cur_proc->next) {
       p = cur_proc->cur_proc;
       acquire(&p->lock);
@@ -520,7 +537,7 @@ scheduler(void)
       }
       release(&p->lock);
     }
-    release(&proc_list_lock);
+    // release(&proc_list_lock);
   }
 }
 
@@ -539,7 +556,7 @@ sched(void)
 
   if(!holding(&p->lock))
     panic("sched p->lock");
-  if(mycpu()->noff != 2)
+  if(mycpu()->noff != 1)
     panic("sched locks");
   if(p->state == RUNNING)
     panic("sched running");
@@ -836,7 +853,7 @@ int dump2(int pid, int register_num, uint64 return_value_addr){
 // Get neighbors in proc_list of proc by pid
 // Returns 0 on success and pid_left in lpid_a, pid_right in rpid_a
 // Returns -1 if process with this pid does not exist
-int neighbors(int pid, uint64 lpid_a, uint64 rpid_a)
+int neighbors(int pid, uint64 lpid_a, uint64 rpid_a, uint64 lstate_a, uint64 rstate_a)
 {
   struct proc_list *p;
   pagetable_t pagetable = myproc()->pagetable;
@@ -846,10 +863,14 @@ int neighbors(int pid, uint64 lpid_a, uint64 rpid_a)
 
   // No such process
   if (p == proc_list) return -1;
-
+  int l_st, r_st;
+  l_st = p->prev->cur_proc->state != UNUSED;
+  r_st = p->next->cur_proc->state != UNUSED;
   // Copyout failed
   if ((lpid_a != 0 && copyout(pagetable, lpid_a, (char *)(&p->prev->cur_proc->pid), sizeof(int)) < 0) || 
-    (rpid_a != 0 && copyout(pagetable, rpid_a, (char *)(&p->next->cur_proc->pid), sizeof(int)) < 0)) {
+    (rpid_a != 0 && copyout(pagetable, rpid_a, (char *)(&p->next->cur_proc->pid), sizeof(int)) < 0) ||
+    copyout(pagetable, lstate_a, (char *)(&l_st), sizeof(int)) < 0 ||
+    copyout(pagetable, rstate_a, (char *)(&r_st), sizeof(int)) < 0) {
       return -1;
   }
 

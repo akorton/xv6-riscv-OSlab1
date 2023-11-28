@@ -110,7 +110,7 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 int             dump(void);
 int             dump2(int pid, int register_num, uint64 return_value_addr);
-int             neighbors(int, uint64, uint64);
+int             neighbors(int, uint64, uint64, uint64, uint64);
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -202,8 +202,10 @@ int lst_empty(struct list*);
 void proc_lst_init(struct proc_list*);
 void proc_lst_remove(struct proc_list*);
 void proc_lst_push(struct proc_list*, struct proc_list*);
-void roc_lst_print(struct proc_list*);
+void proc_lst_print(struct proc_list*);
 int proc_lst_empty(struct proc_list*);
+int proc_lst_size(struct proc_list *);
+struct proc_list* proc_lst_pop(struct proc_list *);
 struct proc_list *get_proc_list_by_proc(struct proc*, struct proc_list*);
 
 // buddy.c

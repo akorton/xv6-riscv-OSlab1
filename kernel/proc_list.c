@@ -31,12 +31,10 @@ proc_lst_remove(struct proc_list *e) {
 void
 proc_lst_push(struct proc_list *lst, struct proc_list *p)
 {
-  if (lst->next != lst) acquire(&lst->next->cur_proc->lock);
   p->next = lst->next;
   p->prev = lst;
   lst->next->prev = p;
   lst->next = p;
-  if (p->next != lst) release(&p->next->cur_proc->lock);
 }
 
 void
@@ -56,6 +54,14 @@ int proc_lst_size(struct proc_list *lst)
     size++;
   }
   return size;
+}
+
+struct proc_list* proc_lst_pop(struct proc_list *lst) {
+  if(lst->next == lst)
+    panic("lst_pop");
+  struct proc_list *p = lst->next;
+  proc_lst_remove(p);
+  return p;
 }
 
 struct proc_list *get_proc_list_by_proc(struct proc *cur_proc, struct proc_list* head)
