@@ -399,7 +399,7 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-  printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
+  // printf("List proc size after fork with pid %d is %d\n", np->pid, proc_lst_size(proc_list));
   return pid;
 }
 
@@ -891,8 +891,8 @@ int neighbors(int pid, uint64 lpid_a, uint64 rpid_a, uint64 lstate_a, uint64 rst
   // Copyout failed
   if ((lpid_a != 0 && copyout(pagetable, lpid_a, (char *)(&p->prev->cur_proc->pid), sizeof(int)) < 0) || 
     (rpid_a != 0 && copyout(pagetable, rpid_a, (char *)(&p->next->cur_proc->pid), sizeof(int)) < 0) ||
-    copyout(pagetable, lstate_a, (char *)(&l_st), sizeof(int)) < 0 ||
-    copyout(pagetable, rstate_a, (char *)(&r_st), sizeof(int)) < 0) {
+    (lstate_a != 0 && copyout(pagetable, lstate_a, (char *)(&l_st), sizeof(int)) < 0) ||
+    (rstate_a != 0 &&copyout(pagetable, rstate_a, (char *)(&r_st), sizeof(int)) < 0)) {
       return -1;
   }
 
