@@ -16,7 +16,6 @@
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
-  struct file file[NFILE];
 } ftable;
 
 void
@@ -30,17 +29,15 @@ struct file*
 filealloc(void)
 {
   struct file *f;
-
-  acquire(&ftable.lock);
-  for(f = ftable.file; f < ftable.file + NFILE; f++){
-    if(f->ref == 0){
-      f->ref = 1;
-      release(&ftable.lock);
-      return f;
-    }
+  void* alloced_memory = bd_malloc(sizeof(struct file));
+  // Cant allocate sizeof(struct file) bytes
+  if (alloced_memory == 0){
+    return 0;
   }
-  release(&ftable.lock);
-  return 0;
+  f = (struct file*) alloced_memory;
+  // Seems like we dont need lock in here because f pointer is not available from outside right now
+  f->ref = 1;
+  return f;
 }
 
 // Increment ref count for file f.
@@ -69,8 +66,7 @@ fileclose(struct file *f)
     return;
   }
   ff = *f;
-  f->ref = 0;
-  f->type = FD_NONE;
+  bd_free(f);
   release(&ftable.lock);
 
   if(ff.type == FD_PIPE){

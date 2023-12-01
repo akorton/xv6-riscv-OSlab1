@@ -28,7 +28,11 @@ OBJS = \
   $K/sysfile.o \
   $K/kernelvec.o \
   $K/plic.o \
-  $K/virtio_disk.o
+  $K/virtio_disk.o \
+  $K/buddy.o \
+  $K/list.o \
+  $K/proc_list.o \
+  $K/rwlock.o \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -106,7 +110,7 @@ $U/%tests.S.o : $U/%tests.S
 $U/%tests.o: $U/%tests.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$U/_%tests: $U/%tests.o $U/%tests.S.o $(ULIB)
+_%tests: %tests.o %tests.S.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
@@ -146,6 +150,8 @@ UPROGS=\
 	$U/_pingpong\
 	$U/_dumptests\
 	$U/_dump2tests\
+	$U/_alloctest\
+	$U/_proclisttest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
