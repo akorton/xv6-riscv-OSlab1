@@ -92,20 +92,24 @@ usertrap(void)
     // printf("r_scause %d, r_stval %p, pagetable %p, pa %p\n, pid %d", r_scause(), PGROUNDDOWN(r_stval()), p->pagetable, PTE2PA(*pte), p->pid);
     // vmprint(p->pagetable);
     // printf("\n\n");
-      
-    
-    // Copy to new physical address
-    void *mem;
+
     pa = PTE2PA(*pte);
     int flags = PTE_FLAGS(*pte);
     flags = flags | PTE_W;
-    if((mem = kalloc()) == 0) {
-      setkilled(p);
-      exit(-1);
+    void *mem;
+
+    if (get_ref_count((void *)pa) != 1) {
+      // Copy to new physical address
+      if((mem = kalloc()) == 0) {
+        setkilled(p);
+        exit(-1);
+      }
+      memmove(mem, (char*)pa, PGSIZE);
+      // Not really kfree more like kdown
+      kfree((void*)pa);
+    } else {
+      mem = (void *)pa;
     }
-    memmove(mem, (char*)pa, PGSIZE);
-    // Not really kfree more like kdown
-    kfree((void*)pa);
 
     *pte = PA2PTE(mem) | flags;
   } else {
