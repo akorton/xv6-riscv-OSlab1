@@ -387,6 +387,23 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
+    if (get_ref_count((void *)pa0) != 1) {
+      void *mem;
+      pte_t *pte = walk(pagetable, va0, 0);
+      int flags = PTE_FLAGS(*pte);
+      flags = flags | PTE_W;
+      if((mem = kalloc()) == 0) {
+        panic("copyout copy on write");
+      }
+      memmove(mem, (char*)pa0, PGSIZE);
+      // Not really kfree more like kdown
+      kfree((void*)pa0);
+
+      *pte = PA2PTE(mem) | flags;
+
+      pa0 = (uint64)mem;
+    }
+
     memmove((void *)(pa0 + (dstva - va0)), src, n);
 
     len -= n;

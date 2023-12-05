@@ -66,6 +66,7 @@ void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
 void            kup(void *);
+int             get_ref_count(void *);
 
 // log.c
 void            initlog(int, struct superblock*);

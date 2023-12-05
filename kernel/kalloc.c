@@ -115,3 +115,16 @@ void kup(void *pa) {
   #endif
   panic("kup invalid arg");
 }
+
+int get_ref_count(void *pa) {
+  acquire(&pages_lock);
+  for (int i = 0; i < NPAGE; ++i) {
+    if (pages[i].pa == pa) {
+      // printf("[debug] kup\n");
+      // printf("pa %p, ref_count %d\n\n", pa, pages[i].ref_count);
+      release(&pages_lock);
+      return pages[i].ref_count;
+    }
+  }
+  panic("get ref_count ivalid arg");
+}

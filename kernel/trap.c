@@ -89,7 +89,7 @@ usertrap(void)
     }
 
     // printf("[debug] trap\n");
-    // printf("r_scause %d, r_stval %p, pagetable %p, pte %p, pa %p\n", r_scause(), PGROUNDDOWN(r_stval()), p->pagetable, pte, PTE2PA(*pte));
+    // printf("r_scause %d, r_stval %p, pagetable %p, pa %p\n, pid %d", r_scause(), PGROUNDDOWN(r_stval()), p->pagetable, PTE2PA(*pte), p->pid);
     // vmprint(p->pagetable);
     // printf("\n\n");
       
