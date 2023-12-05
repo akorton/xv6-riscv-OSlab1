@@ -337,11 +337,20 @@ fork(void)
     return -1;
   }
 
+  // printf("[debug] fork\n");
+  // printf("copy from %p to %p\n\n", p->pagetable, np->pagetable);
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     return -1;
   }
+  // printf("Parent pagetable:\n");
+  // vmprint(p->pagetable);
+  // printf("\nChild pagetable:\n");
+  // vmprint(np->pagetable);
+  // printf("\n");
+
+
   np->sz = p->sz;
 
   // copy saved user registers.

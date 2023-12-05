@@ -63,9 +63,9 @@ void kfree(void *pa) {
         pages[i].pa = 0;
         // printf("[kfree] ");
         // print_number_of_free_pages();
-        release(&pages_lock);
-        return;
       }
+      release(&pages_lock);
+      return;
     }
   }
   panic("kfree invalid arg");
@@ -106,6 +106,8 @@ void kup(void *pa) {
   for (int i = 0; i < NPAGE; ++i) {
     if (pages[i].pa == pa) {
       pages[i].ref_count++;
+      // printf("[debug] kup\n");
+      // printf("pa %p, ref_count %d\n\n", pa, pages[i].ref_count);
       release(&pages_lock);
       return;
     }

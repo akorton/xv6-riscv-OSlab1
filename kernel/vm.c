@@ -150,7 +150,13 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
+
+  // printf("[debug] mappages\n");
+  // printf("pagetable %p, pa %p\n\n", pagetable, pa);
+
   for(;;){
+    // [debug] kalloc in walk() seems to create a memory leak
+    // because we don't usee kalloced memory (for level 0 pte) but do *pte = PA2PTE instead instantly
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
     if(*pte & PTE_V)
@@ -185,9 +191,8 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
-      // printf("[debug]\n");
-      // vmprint(pagetable);
-      // printf("\n\n");
+      // printf("[debug] uvmunmup\n");
+      // printf("pagetable %p, pa %p\n\n", pagetable, pa);
       kfree((void*)pa);
     }
     *pte = 0;
@@ -321,13 +326,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     // #ifdef UB_ON_WRITE
-    // mem = (char*)pa;
-    // kup((void*)pa);
-    // flags = flags & ~PTE_W;
+    mem = (char*)pa;
+    kup((void*)pa);
+    flags = flags & ~PTE_W;
     // #else
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE);
     // #endif
 
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
@@ -339,7 +344,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
     // Forbid writing to parent
     // #ifdef UB_ON_WRITE
-    // *pte = *pte & (~PTE_W);
+    *pte = *pte & (~PTE_W);
     // #endif
   }
   return 0;
