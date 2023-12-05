@@ -69,24 +69,39 @@ usertrap(void)
     // ok
   } else if (r_scause() == 13 || r_scause() == 15) {
     pte_t *pte;
-    uint64 pa;
+    // uint64 pa;
+
+    // Check r_stval < MAXVA
+    if (PGROUNDDOWN(r_stval()) >= MAXVA) {
+      setkilled(p);
+      exit(-1);
+    }
 
     // Find pte by r_stval
-    if((pte = walk(p->pagetable, PGROUNDDOWN(r_stval()), 0)) == 0)
-      panic("trap: pte should exist");
+    if((pte = walk(p->pagetable, PGROUNDDOWN(r_stval()), 0)) == 0 ){
+      setkilled(p);
+      exit(-1);
+      // panic("trap: pte should exist");
+    }
+      
     
     // Copy to new physical address
-    void *mem;
-    pa = PTE2PA(*pte);
-    if((mem = kalloc()) == 0)
-      panic("kalloc in trap");
-    memmove(mem, (char*)pa, PGSIZE);
-    kfree((void*)pa);
+    // void *mem;
+    // pa = PTE2PA(*pte);
+    // if((mem = kalloc()) == 0)
+    //   panic("kalloc in trap");
+    // memmove(mem, (char*)pa, PGSIZE);
+    // // Not really kfree more like kdown
+    // kfree((void*)pa);
 
-    // Ressign virtual address and allow write
-    *pte = PA2PTE(mem) | PTE_FLAGS(*pte) | PTE_W;
+    // // Ressign virtual address and allow write
+    // *pte = PA2PTE(mem) | PTE_FLAGS(*pte) | PTE_W;
+
+    // TEMPORARY!!!
+    setkilled(p);
+    exit(-1);
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+    printf("usertrap(): unexpected scause %d pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
   }

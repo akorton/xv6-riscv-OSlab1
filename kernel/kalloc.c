@@ -22,10 +22,25 @@ struct page_ref pages[NPAGE];
 struct spinlock pages_lock;
 #endif
 
+// Must hold pages_lock
+void print_number_of_free_pages() {
+  int cnt = 0;
+  for (int i = 0; i < NPAGE; ++i) {
+    if (pages[i].ref_count == 0) cnt++;
+  }
+  printf("Number of free pages is %d\n", cnt);
+}
+
+
 void kinit() {
   char *p = (char *)PGROUNDUP((uint64)end);
   bd_init(p, (void *)PHYSTOP);
+  #ifdef UB_ON_WRITE
   initlock(&pages_lock, "pages_lock");
+  acquire(&pages_lock);
+  print_number_of_free_pages();
+  release(&pages_lock);
+  #endif
 }
 
 // Free the page of physical memory pointed at by v,
@@ -46,6 +61,8 @@ void kfree(void *pa) {
       if (pages[i].ref_count == 0) {
         bd_free(pa);
         pages[i].pa = 0;
+        // printf("[kfree] ");
+        // print_number_of_free_pages();
         release(&pages_lock);
         return;
       }
@@ -70,11 +87,15 @@ void *kalloc(void) {
     if (!pages[i].pa) {
       pages[i].pa = cur_pa;
       pages[i].ref_count = 1;
+      // printf("[kalloc] ");
+      // print_number_of_free_pages();
       release(&pages_lock);
       return cur_pa;
     }
   }
-  panic("kalloc pages > NPAGE");
+  // printf("kalloc pages > NPAGE\n");
+  release(&pages_lock);
+  return 0;
   #endif
 }
 

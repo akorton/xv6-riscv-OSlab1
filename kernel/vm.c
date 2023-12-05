@@ -331,10 +331,10 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     // #endif
 
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      // #ifndef UB_ON_WRITE
       kfree(mem);
-      // #endif
+      // #ifndef UB_ON_WRITE
       goto err;
+      // #endif
     }
 
     // Forbid writing to parent
