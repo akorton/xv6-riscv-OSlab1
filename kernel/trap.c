@@ -67,7 +67,7 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if (r_scause() == 13 || r_scause() == 15) {
+  } else if (r_scause() == 15) { // Why exactly should I include scause == 13 ?
     pte_t *pte;
     uint64 pa;
 
@@ -83,8 +83,15 @@ usertrap(void)
       exit(-1);
     }
 
+    if (PTE_FLAGS(*pte) & PTE_B) {
+      setkilled(p);
+      exit(-1);
+    }
+
     // printf("[debug] trap\n");
-    // printf("r_scause %d, r_stval %p, pagetable %p\n\n", r_scause(), PGROUNDDOWN(r_stval()), p->pagetable);
+    // printf("r_scause %d, r_stval %p, pagetable %p, pte %p, pa %p\n", r_scause(), PGROUNDDOWN(r_stval()), p->pagetable, pte, PTE2PA(*pte));
+    // vmprint(p->pagetable);
+    // printf("\n\n");
       
     
     // Copy to new physical address
@@ -93,10 +100,8 @@ usertrap(void)
     int flags = PTE_FLAGS(*pte);
     flags = flags | PTE_W;
     if((mem = kalloc()) == 0) {
-      // Possibly 
-      // setkilled(p);
-      // exit(-1);
-      panic("kalloc in trap");
+      setkilled(p);
+      exit(-1);
     }
     memmove(mem, (char*)pa, PGSIZE);
     // Not really kfree more like kdown

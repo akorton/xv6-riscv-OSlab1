@@ -239,6 +239,10 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
   if(newsz < oldsz)
     return oldsz;
 
+  if (!(xperm & PTE_W)) {
+    xperm |= PTE_B;
+  }
+
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
     mem = kalloc();
@@ -481,6 +485,7 @@ void vmprint_internal(pagetable_t pagetable, int depth)
     print_str_else_space("W", pte & PTE_W);
     print_str_else_space("X", pte & PTE_X);
     print_str_else_space("U", pte & PTE_U);
+    print_str_else_space("B", pte & PTE_B);
     printf("] ");
     
     printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
